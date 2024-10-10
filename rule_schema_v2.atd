@@ -415,6 +415,7 @@ type metavariable_cond = {
   ?kind: string option;
   (* for semgrep-internal-metavariable-name; consider renaming? for v2 *)
   ?module_ <json name="module">: string option;
+  ?modules: string list option;
 
   (* this covers regex:/pattern:, but also all:/any: with optional where:
    * CHECK: language is valid only when combined with a formula
@@ -432,8 +433,15 @@ type mvar = string
 
 type analyzer = [
   | Entropy <json name="entropy">
-  | EntropyV2 <json name="entropy_v2">
+  | EntropyV2 <json name="entropy_v2"> of entropy_analysis_mode
   | Redos <json name="redos">
+]
+<json adapter.ocaml="Rule_schema_v2_adapter.Analyzer">
+
+type entropy_analysis_mode = [
+  | Lax <json name="lax">
+  | Default <json name="default">
+  | Strict <json name="strict">
 ]
 
 (* --------------------------- *)

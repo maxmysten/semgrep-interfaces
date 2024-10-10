@@ -183,6 +183,7 @@ export type ErrorType =
 | { kind: 'FatalError' /* JSON: "Fatal error" */ }
 | { kind: 'Timeout' }
 | { kind: 'OutOfMemory' /* JSON: "Out of memory" */ }
+| { kind: 'StackOverflow' /* JSON: "Stack overflow" */ }
 | { kind: 'TimeoutDuringInterfile' /* JSON: "Timeout during interfile analysis" */ }
 | { kind: 'OutOfMemoryDuringInterfile' /* JSON: "OOM during interfile analysis" */ }
 | { kind: 'MissingPlugin' /* JSON: "Missing plugin" */ }
@@ -480,6 +481,7 @@ export type FoundDependency = {
   allowed_hashes: Map<string, string[]>;
   resolved_url?: string;
   transitivity: Transitivity;
+  lockfile_path?: Fpath;
   line_number?: number /*int*/;
   children?: DependencyChild[];
   git_ref?: string;
@@ -826,11 +828,44 @@ export type OutputFormat =
 | { kind: 'Vim' }
 | { kind: 'Emacs' }
 
+export type ManifestKind =
+| { kind: 'PomXml' }
+| { kind: 'BuildGradle' }
+
+export type Manifest = {
+  kind: ManifestKind;
+  path: Fpath;
+}
+
+export type ResolutionError =
+| { kind: 'UnsupportedManifest' }
+| { kind: 'MissingRequirement'; value: string }
+| { kind: 'ResolutionCmdFailed'; value: ResolutionCmdFailed }
+| { kind: 'ParseDependenciesFailed'; value: string }
+
+export type ResolutionCmdFailed = {
+  command: string;
+  message: string;
+}
+
+export type ResolutionResult =
+| { kind: 'ResolutionOk'; value: FoundDependency[] }
+| { kind: 'ResolutionError'; value: ResolutionError }
+
+export type DumpRulePartitionsParams = {
+  rules: RawJson;
+  n_partitions: number /*int*/;
+  output_dir: Fpath;
+}
+
 export type FunctionCall =
 | { kind: 'CallContributions' }
 | { kind: 'CallApplyFixes'; value: ApplyFixesParams }
 | { kind: 'CallSarifFormat'; value: SarifFormatParams }
 | { kind: 'CallFormatter'; value: [OutputFormat, CliOutput] }
+| { kind: 'CallValidate'; value: Fpath }
+| { kind: 'CallResolveDependencies'; value: Manifest[] }
+| { kind: 'CallDumpRulePartitions'; value: DumpRulePartitionsParams }
 
 export type FunctionReturn =
 | { kind: 'RetError'; value: string }
@@ -838,6 +873,9 @@ export type FunctionReturn =
 | { kind: 'RetSarifFormat'; value: SarifFormatReturn }
 | { kind: 'RetContributions'; value: Contributions }
 | { kind: 'RetFormatter'; value: string }
+| { kind: 'RetValidate'; value: boolean }
+| { kind: 'RetResolveDependencies'; value: [Manifest, ResolutionResult][] }
+| { kind: 'RetDumpRulePartitions'; value: boolean }
 
 export function writeRawJson(x: RawJson, context: any = x): any {
   return ((x: any, context): any => x)(x, context);
@@ -1391,6 +1429,8 @@ export function writeErrorType(x: ErrorType, context: any = x): any {
       return 'Timeout'
     case 'OutOfMemory':
       return 'Out of memory'
+    case 'StackOverflow':
+      return 'Stack overflow'
     case 'TimeoutDuringInterfile':
       return 'Timeout during interfile analysis'
     case 'OutOfMemoryDuringInterfile':
@@ -1445,6 +1485,8 @@ export function readErrorType(x: any, context: any = x): ErrorType {
         return { kind: 'Timeout' }
       case 'Out of memory':
         return { kind: 'OutOfMemory' }
+      case 'Stack overflow':
+        return { kind: 'StackOverflow' }
       case 'Timeout during interfile analysis':
         return { kind: 'TimeoutDuringInterfile' }
       case 'OOM during interfile analysis':
@@ -2374,6 +2416,7 @@ export function writeFoundDependency(x: FoundDependency, context: any = x): any 
     'allowed_hashes': _atd_write_required_field('FoundDependency', 'allowed_hashes', _atd_write_assoc_map_to_object(_atd_write_array(_atd_write_string)), x.allowed_hashes, x),
     'resolved_url': _atd_write_optional_field(_atd_write_string, x.resolved_url, x),
     'transitivity': _atd_write_required_field('FoundDependency', 'transitivity', writeTransitivity, x.transitivity, x),
+    'lockfile_path': _atd_write_optional_field(writeFpath, x.lockfile_path, x),
     'line_number': _atd_write_optional_field(_atd_write_int, x.line_number, x),
     'children': _atd_write_optional_field(_atd_write_array(writeDependencyChild), x.children, x),
     'git_ref': _atd_write_optional_field(_atd_write_string, x.git_ref, x),
@@ -2388,6 +2431,7 @@ export function readFoundDependency(x: any, context: any = x): FoundDependency {
     allowed_hashes: _atd_read_required_field('FoundDependency', 'allowed_hashes', _atd_read_assoc_object_into_map(_atd_read_array(_atd_read_string)), x['allowed_hashes'], x),
     resolved_url: _atd_read_optional_field(_atd_read_string, x['resolved_url'], x),
     transitivity: _atd_read_required_field('FoundDependency', 'transitivity', readTransitivity, x['transitivity'], x),
+    lockfile_path: _atd_read_optional_field(readFpath, x['lockfile_path'], x),
     line_number: _atd_read_optional_field(_atd_read_int, x['line_number'], x),
     children: _atd_read_optional_field(_atd_read_array(readDependencyChild), x['children'], x),
     git_ref: _atd_read_optional_field(_atd_read_string, x['git_ref'], x),
@@ -3322,6 +3366,132 @@ export function readOutputFormat(x: any, context: any = x): OutputFormat {
   }
 }
 
+export function writeManifestKind(x: ManifestKind, context: any = x): any {
+  switch (x.kind) {
+    case 'PomXml':
+      return 'PomXml'
+    case 'BuildGradle':
+      return 'BuildGradle'
+  }
+}
+
+export function readManifestKind(x: any, context: any = x): ManifestKind {
+  switch (x) {
+    case 'PomXml':
+      return { kind: 'PomXml' }
+    case 'BuildGradle':
+      return { kind: 'BuildGradle' }
+    default:
+      _atd_bad_json('ManifestKind', x, context)
+      throw new Error('impossible')
+  }
+}
+
+export function writeManifest(x: Manifest, context: any = x): any {
+  return {
+    'kind': _atd_write_required_field('Manifest', 'kind', writeManifestKind, x.kind, x),
+    'path': _atd_write_required_field('Manifest', 'path', writeFpath, x.path, x),
+  };
+}
+
+export function readManifest(x: any, context: any = x): Manifest {
+  return {
+    kind: _atd_read_required_field('Manifest', 'kind', readManifestKind, x['kind'], x),
+    path: _atd_read_required_field('Manifest', 'path', readFpath, x['path'], x),
+  };
+}
+
+export function writeResolutionError(x: ResolutionError, context: any = x): any {
+  switch (x.kind) {
+    case 'UnsupportedManifest':
+      return 'UnsupportedManifest'
+    case 'MissingRequirement':
+      return ['MissingRequirement', _atd_write_string(x.value, x)]
+    case 'ResolutionCmdFailed':
+      return ['ResolutionCmdFailed', writeResolutionCmdFailed(x.value, x)]
+    case 'ParseDependenciesFailed':
+      return ['ParseDependenciesFailed', _atd_write_string(x.value, x)]
+  }
+}
+
+export function readResolutionError(x: any, context: any = x): ResolutionError {
+  if (typeof x === 'string') {
+    switch (x) {
+      case 'UnsupportedManifest':
+        return { kind: 'UnsupportedManifest' }
+      default:
+        _atd_bad_json('ResolutionError', x, context)
+        throw new Error('impossible')
+    }
+  }
+  else {
+    _atd_check_json_tuple(2, x, context)
+    switch (x[0]) {
+      case 'MissingRequirement':
+        return { kind: 'MissingRequirement', value: _atd_read_string(x[1], x) }
+      case 'ResolutionCmdFailed':
+        return { kind: 'ResolutionCmdFailed', value: readResolutionCmdFailed(x[1], x) }
+      case 'ParseDependenciesFailed':
+        return { kind: 'ParseDependenciesFailed', value: _atd_read_string(x[1], x) }
+      default:
+        _atd_bad_json('ResolutionError', x, context)
+        throw new Error('impossible')
+    }
+  }
+}
+
+export function writeResolutionCmdFailed(x: ResolutionCmdFailed, context: any = x): any {
+  return {
+    'command': _atd_write_required_field('ResolutionCmdFailed', 'command', _atd_write_string, x.command, x),
+    'message': _atd_write_required_field('ResolutionCmdFailed', 'message', _atd_write_string, x.message, x),
+  };
+}
+
+export function readResolutionCmdFailed(x: any, context: any = x): ResolutionCmdFailed {
+  return {
+    command: _atd_read_required_field('ResolutionCmdFailed', 'command', _atd_read_string, x['command'], x),
+    message: _atd_read_required_field('ResolutionCmdFailed', 'message', _atd_read_string, x['message'], x),
+  };
+}
+
+export function writeResolutionResult(x: ResolutionResult, context: any = x): any {
+  switch (x.kind) {
+    case 'ResolutionOk':
+      return ['ResolutionOk', _atd_write_array(writeFoundDependency)(x.value, x)]
+    case 'ResolutionError':
+      return ['ResolutionError', writeResolutionError(x.value, x)]
+  }
+}
+
+export function readResolutionResult(x: any, context: any = x): ResolutionResult {
+  _atd_check_json_tuple(2, x, context)
+  switch (x[0]) {
+    case 'ResolutionOk':
+      return { kind: 'ResolutionOk', value: _atd_read_array(readFoundDependency)(x[1], x) }
+    case 'ResolutionError':
+      return { kind: 'ResolutionError', value: readResolutionError(x[1], x) }
+    default:
+      _atd_bad_json('ResolutionResult', x, context)
+      throw new Error('impossible')
+  }
+}
+
+export function writeDumpRulePartitionsParams(x: DumpRulePartitionsParams, context: any = x): any {
+  return {
+    'rules': _atd_write_required_field('DumpRulePartitionsParams', 'rules', writeRawJson, x.rules, x),
+    'n_partitions': _atd_write_required_field('DumpRulePartitionsParams', 'n_partitions', _atd_write_int, x.n_partitions, x),
+    'output_dir': _atd_write_required_field('DumpRulePartitionsParams', 'output_dir', writeFpath, x.output_dir, x),
+  };
+}
+
+export function readDumpRulePartitionsParams(x: any, context: any = x): DumpRulePartitionsParams {
+  return {
+    rules: _atd_read_required_field('DumpRulePartitionsParams', 'rules', readRawJson, x['rules'], x),
+    n_partitions: _atd_read_required_field('DumpRulePartitionsParams', 'n_partitions', _atd_read_int, x['n_partitions'], x),
+    output_dir: _atd_read_required_field('DumpRulePartitionsParams', 'output_dir', readFpath, x['output_dir'], x),
+  };
+}
+
 export function writeFunctionCall(x: FunctionCall, context: any = x): any {
   switch (x.kind) {
     case 'CallContributions':
@@ -3332,6 +3502,12 @@ export function writeFunctionCall(x: FunctionCall, context: any = x): any {
       return ['CallSarifFormat', writeSarifFormatParams(x.value, x)]
     case 'CallFormatter':
       return ['CallFormatter', ((x, context) => [writeOutputFormat(x[0], x), writeCliOutput(x[1], x)])(x.value, x)]
+    case 'CallValidate':
+      return ['CallValidate', writeFpath(x.value, x)]
+    case 'CallResolveDependencies':
+      return ['CallResolveDependencies', _atd_write_array(writeManifest)(x.value, x)]
+    case 'CallDumpRulePartitions':
+      return ['CallDumpRulePartitions', writeDumpRulePartitionsParams(x.value, x)]
   }
 }
 
@@ -3354,6 +3530,12 @@ export function readFunctionCall(x: any, context: any = x): FunctionCall {
         return { kind: 'CallSarifFormat', value: readSarifFormatParams(x[1], x) }
       case 'CallFormatter':
         return { kind: 'CallFormatter', value: ((x, context): [OutputFormat, CliOutput] => { _atd_check_json_tuple(2, x, context); return [readOutputFormat(x[0], x), readCliOutput(x[1], x)] })(x[1], x) }
+      case 'CallValidate':
+        return { kind: 'CallValidate', value: readFpath(x[1], x) }
+      case 'CallResolveDependencies':
+        return { kind: 'CallResolveDependencies', value: _atd_read_array(readManifest)(x[1], x) }
+      case 'CallDumpRulePartitions':
+        return { kind: 'CallDumpRulePartitions', value: readDumpRulePartitionsParams(x[1], x) }
       default:
         _atd_bad_json('FunctionCall', x, context)
         throw new Error('impossible')
@@ -3373,6 +3555,12 @@ export function writeFunctionReturn(x: FunctionReturn, context: any = x): any {
       return ['RetContributions', writeContributions(x.value, x)]
     case 'RetFormatter':
       return ['RetFormatter', _atd_write_string(x.value, x)]
+    case 'RetValidate':
+      return ['RetValidate', _atd_write_bool(x.value, x)]
+    case 'RetResolveDependencies':
+      return ['RetResolveDependencies', _atd_write_array(((x, context) => [writeManifest(x[0], x), writeResolutionResult(x[1], x)]))(x.value, x)]
+    case 'RetDumpRulePartitions':
+      return ['RetDumpRulePartitions', _atd_write_bool(x.value, x)]
   }
 }
 
@@ -3389,6 +3577,12 @@ export function readFunctionReturn(x: any, context: any = x): FunctionReturn {
       return { kind: 'RetContributions', value: readContributions(x[1], x) }
     case 'RetFormatter':
       return { kind: 'RetFormatter', value: _atd_read_string(x[1], x) }
+    case 'RetValidate':
+      return { kind: 'RetValidate', value: _atd_read_bool(x[1], x) }
+    case 'RetResolveDependencies':
+      return { kind: 'RetResolveDependencies', value: _atd_read_array(((x, context): [Manifest, ResolutionResult] => { _atd_check_json_tuple(2, x, context); return [readManifest(x[0], x), readResolutionResult(x[1], x)] }))(x[1], x) }
+    case 'RetDumpRulePartitions':
+      return { kind: 'RetDumpRulePartitions', value: _atd_read_bool(x[1], x) }
     default:
       _atd_bad_json('FunctionReturn', x, context)
       throw new Error('impossible')

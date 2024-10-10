@@ -397,6 +397,7 @@ type found_dependency = Semgrep_output_v1_t.found_dependency = {
   allowed_hashes: (string * string list) list;
   resolved_url: string option;
   transitivity: transitivity;
+  lockfile_path: fpath option;
   line_number: int option;
   children: dependency_child list option;
   git_ref: string option
@@ -451,6 +452,7 @@ type error_type = Semgrep_output_v1_t.error_type =
   | FatalError
   | Timeout
   | OutOfMemory
+  | StackOverflow
   | TimeoutDuringInterfile
   | OutOfMemoryDuringInterfile
   | MissingPlugin
@@ -529,6 +531,15 @@ type engine_kind = Semgrep_output_v1_t.engine_kind [@@deriving show]
 
 type rule_id_and_engine_kind = Semgrep_output_v1_t.rule_id_and_engine_kind
 
+type resolution_cmd_failed = Semgrep_output_v1_t.resolution_cmd_failed = {
+  command: string;
+  message: string
+}
+
+type resolution_error = Semgrep_output_v1_t.resolution_error
+
+type resolution_result = Semgrep_output_v1_t.resolution_result
+
 type profile = Semgrep_output_v1_t.profile = {
   rules: rule_id list;
   rules_parse_time: float;
@@ -546,6 +557,13 @@ type parsing_stats = Semgrep_output_v1_t.parsing_stats = {
 }
 
 type output_format = Semgrep_output_v1_t.output_format
+
+type manifest_kind = Semgrep_output_v1_t.manifest_kind
+
+type manifest = Semgrep_output_v1_t.manifest = {
+  kind: manifest_kind;
+  path: fpath
+}
 
 type has_features = Semgrep_output_v1_t.has_features = {
   has_autofix: bool;
@@ -579,6 +597,13 @@ type edit = Semgrep_output_v1_t.edit = {
   start_offset: int;
   end_offset: int;
   replacement_text: string
+}
+
+type dump_rule_partitions_params =
+  Semgrep_output_v1_t.dump_rule_partitions_params = {
+  rules: raw_json;
+  n_partitions: int;
+  output_dir: fpath
 }
 
 type cli_output = Semgrep_output_v1_t.cli_output = {
@@ -2478,6 +2503,66 @@ val rule_id_and_engine_kind_of_string :
   string -> rule_id_and_engine_kind
   (** Deserialize JSON data of type {!type:rule_id_and_engine_kind}. *)
 
+val write_resolution_cmd_failed :
+  Buffer.t -> resolution_cmd_failed -> unit
+  (** Output a JSON value of type {!type:resolution_cmd_failed}. *)
+
+val string_of_resolution_cmd_failed :
+  ?len:int -> resolution_cmd_failed -> string
+  (** Serialize a value of type {!type:resolution_cmd_failed}
+      into a JSON string.
+      @param len specifies the initial length
+                 of the buffer used internally.
+                 Default: 1024. *)
+
+val read_resolution_cmd_failed :
+  Yojson.Safe.lexer_state -> Lexing.lexbuf -> resolution_cmd_failed
+  (** Input JSON data of type {!type:resolution_cmd_failed}. *)
+
+val resolution_cmd_failed_of_string :
+  string -> resolution_cmd_failed
+  (** Deserialize JSON data of type {!type:resolution_cmd_failed}. *)
+
+val write_resolution_error :
+  Buffer.t -> resolution_error -> unit
+  (** Output a JSON value of type {!type:resolution_error}. *)
+
+val string_of_resolution_error :
+  ?len:int -> resolution_error -> string
+  (** Serialize a value of type {!type:resolution_error}
+      into a JSON string.
+      @param len specifies the initial length
+                 of the buffer used internally.
+                 Default: 1024. *)
+
+val read_resolution_error :
+  Yojson.Safe.lexer_state -> Lexing.lexbuf -> resolution_error
+  (** Input JSON data of type {!type:resolution_error}. *)
+
+val resolution_error_of_string :
+  string -> resolution_error
+  (** Deserialize JSON data of type {!type:resolution_error}. *)
+
+val write_resolution_result :
+  Buffer.t -> resolution_result -> unit
+  (** Output a JSON value of type {!type:resolution_result}. *)
+
+val string_of_resolution_result :
+  ?len:int -> resolution_result -> string
+  (** Serialize a value of type {!type:resolution_result}
+      into a JSON string.
+      @param len specifies the initial length
+                 of the buffer used internally.
+                 Default: 1024. *)
+
+val read_resolution_result :
+  Yojson.Safe.lexer_state -> Lexing.lexbuf -> resolution_result
+  (** Input JSON data of type {!type:resolution_result}. *)
+
+val resolution_result_of_string :
+  string -> resolution_result
+  (** Deserialize JSON data of type {!type:resolution_result}. *)
+
 val write_profile :
   Buffer.t -> profile -> unit
   (** Output a JSON value of type {!type:profile}. *)
@@ -2537,6 +2622,46 @@ val read_output_format :
 val output_format_of_string :
   string -> output_format
   (** Deserialize JSON data of type {!type:output_format}. *)
+
+val write_manifest_kind :
+  Buffer.t -> manifest_kind -> unit
+  (** Output a JSON value of type {!type:manifest_kind}. *)
+
+val string_of_manifest_kind :
+  ?len:int -> manifest_kind -> string
+  (** Serialize a value of type {!type:manifest_kind}
+      into a JSON string.
+      @param len specifies the initial length
+                 of the buffer used internally.
+                 Default: 1024. *)
+
+val read_manifest_kind :
+  Yojson.Safe.lexer_state -> Lexing.lexbuf -> manifest_kind
+  (** Input JSON data of type {!type:manifest_kind}. *)
+
+val manifest_kind_of_string :
+  string -> manifest_kind
+  (** Deserialize JSON data of type {!type:manifest_kind}. *)
+
+val write_manifest :
+  Buffer.t -> manifest -> unit
+  (** Output a JSON value of type {!type:manifest}. *)
+
+val string_of_manifest :
+  ?len:int -> manifest -> string
+  (** Serialize a value of type {!type:manifest}
+      into a JSON string.
+      @param len specifies the initial length
+                 of the buffer used internally.
+                 Default: 1024. *)
+
+val read_manifest :
+  Yojson.Safe.lexer_state -> Lexing.lexbuf -> manifest
+  (** Input JSON data of type {!type:manifest}. *)
+
+val manifest_of_string :
+  string -> manifest
+  (** Deserialize JSON data of type {!type:manifest}. *)
 
 val write_has_features :
   Buffer.t -> has_features -> unit
@@ -2677,6 +2802,26 @@ val read_edit :
 val edit_of_string :
   string -> edit
   (** Deserialize JSON data of type {!type:edit}. *)
+
+val write_dump_rule_partitions_params :
+  Buffer.t -> dump_rule_partitions_params -> unit
+  (** Output a JSON value of type {!type:dump_rule_partitions_params}. *)
+
+val string_of_dump_rule_partitions_params :
+  ?len:int -> dump_rule_partitions_params -> string
+  (** Serialize a value of type {!type:dump_rule_partitions_params}
+      into a JSON string.
+      @param len specifies the initial length
+                 of the buffer used internally.
+                 Default: 1024. *)
+
+val read_dump_rule_partitions_params :
+  Yojson.Safe.lexer_state -> Lexing.lexbuf -> dump_rule_partitions_params
+  (** Input JSON data of type {!type:dump_rule_partitions_params}. *)
+
+val dump_rule_partitions_params_of_string :
+  string -> dump_rule_partitions_params
+  (** Deserialize JSON data of type {!type:dump_rule_partitions_params}. *)
 
 val write_cli_output :
   Buffer.t -> cli_output -> unit

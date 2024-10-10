@@ -836,7 +836,8 @@
     ],
     "maturity": "alpha",
     "exts": [
-      ".xml"
+      ".xml",
+      ".plist"
     ],
     "example_ext": ".xml",
     "excluded_exts": [],
